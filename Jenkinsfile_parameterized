@@ -1,0 +1,31 @@
+#!groovy
+@Library("Infrastructure") _
+
+properties([
+  parameters([
+    choice(name: 'ENVIRONMENT', choices: 'saat\nsprod\nsandbox', description: 'Environment where code should be build and deployed')
+  ]),
+  pipelineTriggers([[$class: 'GitHubPushTrigger']])
+])
+
+List<LinkedHashMap<String, Object>> secrets = [
+    secret('ccd-caseworker-autotest-email', 'CCD_CASEWORKER_AUTOTEST_EMAIL'),
+    secret('ccd-caseworker-autotest-password', 'CCD_CASEWORKER_AUTOTEST_PASSWORD'),
+    secret('ccd-api-gateway-s2s-secret', 'CCD_GW_SERVICE_SECRET'),
+    secret('ccd-api-gateway-oauth2-client-secret', 'OAUTH2_CLIENT_SECRET'),
+]
+
+static LinkedHashMap<String, Object> secret(String secretName, String envVar) {
+    [ $class: 'AzureKeyVaultSecret',
+      secretType: 'Secret',
+      name: secretName,
+      version: '',
+      envVariable: envVar
+    ]
+}
+
+withParameterizedPipeline('java', 'ccd', 'data-store-api', params.ENVIRONMENT, 'sandbox') {
+    enableSlackNotifications('#ccd-param-builds')
+    enableDbMigration()
+    loadVaultSecrets(secrets)
+}
